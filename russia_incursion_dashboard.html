@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Russian Naval Activity Monitor — UK Waters</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════ */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --sidebar-w:320px;
+  --header-h:52px;
+  --fg:#1a1a1a;--fg2:#555;--fg3:#888;
+  --bg:#fff;--bg2:#f5f5f5;--bg3:#eaeaea;
+  --border:#ddd;
+  --accent:#2c5f8a;
+  --font-serif:"Georgia","Times New Roman",serif;
+  --font-sans:"Helvetica Neue",Arial,sans-serif;
+}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--fg);overflow:hidden;height:100vh}
+
+/* ═══ HEADER ════════════════════════════════════════════════════ */
+.header{
+  height:var(--header-h);display:flex;align-items:center;
+  padding:0 20px;border-bottom:1px solid var(--border);
+  background:#fff;z-index:1000;position:relative;
+}
+.header-title{
+  font-family:var(--font-serif);font-size:16px;font-weight:700;
+  letter-spacing:-0.2px;white-space:nowrap;
+}
+.header-title span{font-weight:400;color:var(--fg2);font-size:13px;margin-left:8px}
+.header-center{flex:1;display:flex;justify-content:center;gap:2px}
+.view-btn{
+  padding:6px 18px;font-size:12px;font-weight:600;
+  border:1px solid var(--border);background:var(--bg);color:var(--fg2);
+  cursor:pointer;transition:all .15s;font-family:var(--font-sans);
+}
+.view-btn:first-child{border-radius:4px 0 0 4px}
+.view-btn:last-child{border-radius:0 4px 4px 0}
+.view-btn.active{background:var(--fg);color:#fff;border-color:var(--fg)}
+.header-actions{display:flex;gap:8px;align-items:center}
+.btn{
+  padding:6px 14px;font-size:11.5px;font-weight:600;
+  border:1px solid var(--border);border-radius:4px;background:#fff;
+  color:var(--fg);cursor:pointer;font-family:var(--font-sans);
+  transition:all .15s;display:flex;align-items:center;gap:5px;
+}
+.btn:hover{background:var(--bg2)}
+.btn-primary{background:var(--fg);color:#fff;border-color:var(--fg)}
+.btn-primary:hover{background:#333}
+.btn svg{width:14px;height:14px}
+
+/* ═══ LAYOUT ════════════════════════════════════════════════════ */
+.app{display:flex;height:calc(100vh - var(--header-h))}
+.sidebar{
+  width:var(--sidebar-w);min-width:var(--sidebar-w);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  background:#fff;overflow:hidden;transition:margin .25s;
+}
+.sidebar.collapsed{margin-left:calc(-1 * var(--sidebar-w))}
+.main{flex:1;position:relative;overflow:hidden}
+
+/* ═══ SIDEBAR SECTIONS ══════════════════════════════════════════ */
+.sb-section{border-bottom:1px solid var(--border)}
+.sb-header{
+  padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
+  cursor:pointer;user-select:none;
+}
+.sb-header h3{
+  font-size:10.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.8px;color:var(--fg3);
+}
+.sb-header .badge{
+  background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+  padding:1px 6px;border-radius:8px;
+}
+.sb-body{padding:0 16px 12px;overflow-y:auto}
+/* filters */
+.filter-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.filter-row input[type=checkbox]{accent-color:var(--fg)}
+.filter-row label{font-size:11px;color:var(--fg2);cursor:pointer}
+.filter-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* incident list */
+.incident-list{max-height:260px;overflow-y:auto}
+.incident-item{
+  padding:8px 10px;border-radius:4px;cursor:pointer;
+  border-left:3px solid transparent;margin-bottom:2px;
+  transition:background .1s;
+}
+.incident-item:hover{background:var(--bg2)}
+.incident-item.active{background:#eef3f8;border-left-color:var(--accent)}
+.incident-id{font-size:9px;color:var(--fg3);font-weight:600;letter-spacing:.4px}
+.incident-date{font-size:11.5px;font-weight:600;color:var(--fg)}
+.incident-short{font-size:10.5px;color:var(--fg2);margin-top:1px;line-height:1.35}
+.incident-cat-tag{
+  display:inline-block;font-size:8.5px;font-weight:700;
+  padding:1px 5px;border-radius:2px;color:#fff;margin-top:3px;
+  text-transform:uppercase;letter-spacing:.3px;
+}
+
+/* news feed */
+.news-list{max-height:320px;overflow-y:auto}
+.news-item{
+  padding:8px 10px;border-radius:4px;margin-bottom:3px;
+  border-left:3px solid var(--bg3);transition:background .1s;
+}
+.news-item:hover{background:var(--bg2)}
+.news-item.fresh{border-left-color:#d4920b}
+.news-title{font-size:11.5px;font-weight:600;line-height:1.35;color:var(--fg)}
+.news-title a{color:inherit;text-decoration:none}
+.news-title a:hover{text-decoration:underline}
+.news-meta{font-size:9.5px;color:var(--fg3);margin-top:2px}
+.news-actions{margin-top:4px;display:flex;gap:6px}
+.news-actions button{
+  font-size:9.5px;padding:2px 7px;border:1px solid var(--border);
+  border-radius:3px;background:#fff;cursor:pointer;color:var(--fg2);
+}
+.news-actions button:hover{background:var(--bg2)}
+.feed-controls{display:flex;gap:6px;margin-bottom:8px;align-items:center}
+.feed-status{font-size:9.5px;color:var(--fg3);margin-left:auto}
+.auto-badge{
+  font-size:8.5px;padding:1px 5px;border-radius:3px;
+  background:#e8f5e9;color:#2e7d32;font-weight:600;
+}
+
+/* ═══ MODAL ═════════════════════════════════════════════════════ */
+.modal-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.35);z-index:2000;
+  display:none;align-items:center;justify-content:center;
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:#fff;border-radius:6px;padding:24px 28px;
+  width:440px;max-height:80vh;overflow-y:auto;
+  box-shadow:0 8px 30px rgba(0,0,0,.2);
+}
+.modal h2{font-size:15px;font-weight:700;margin-bottom:14px;font-family:var(--font-serif)}
+.form-row{margin-bottom:10px}
+.form-row label{display:block;font-size:10.5px;font-weight:600;color:var(--fg3);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.form-row input,.form-row select,.form-row textarea{
+  width:100%;padding:7px 10px;border:1px solid var(--border);
+  border-radius:4px;font-size:12px;font-family:var(--font-sans);
+}
+.form-row textarea{resize:vertical;min-height:50px}
+.form-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* ═══ MAP VIEW ══════════════════════════════════════════════════ */
+#map-view{width:100%;height:100%;display:block}
+#map-container{width:100%;height:100%}
+
+/* ═══ TIMELINE VIEW ═════════════════════════════════════════════ */
+#timeline-view{
+  width:100%;height:100%;display:none;
+  background:#fff;overflow:auto;padding:40px 40px 60px;
+}
+.tl-title{
+  font-family:var(--font-serif);font-size:20px;font-weight:700;
+  margin-bottom:2px;
+}
+.tl-subtitle{font-size:12px;color:var(--fg2);margin-bottom:24px}
+.tl-legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+.tl-legend-item{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--fg2)}
+.tl-legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.tl-canvas{position:relative;min-width:1100px;height:380px;margin-bottom:20px}
+.tl-axis{position:absolute;left:40px;right:20px;top:190px;height:2px;background:var(--fg)}
+.tl-year-line{position:absolute;top:0;bottom:30px;width:1px;background:#e0e0e0}
+.tl-year-label{
+  position:absolute;bottom:0;transform:translateX(-50%);
+  font-size:12px;font-weight:600;color:var(--fg3);
+}
+.tl-event{position:absolute;display:flex;flex-direction:column;align-items:center;cursor:pointer}
+.tl-event-above{flex-direction:column-reverse}
+.tl-event-stem{width:1px;background:#aaa}
+.tl-event-dot{width:11px;height:11px;border-radius:50%;border:2px solid #fff;flex-shrink:0;z-index:2;box-shadow:0 0 0 1px rgba(0,0,0,.1)}
+.tl-event-label{font-size:9px;line-height:1.3;color:var(--fg2);max-width:105px;text-align:center;padding:2px 0}
+.tl-event-date{font-weight:700;font-size:10px;color:var(--fg);white-space:nowrap}
+.tl-event:hover .tl-event-dot{transform:scale(1.4);transition:transform .15s}
+.tl-event:hover .tl-event-label{color:var(--fg)}
+.tl-source{font-size:9.5px;color:var(--fg3);margin-top:8px}
+
+/* ═══ EXPORT OVERLAY ════════════════════════════════════════════ */
+.export-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(255,255,255,.85);z-index:3000;
+  display:none;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;
+}
+.export-overlay.active{display:flex}
+.export-spinner{
+  width:32px;height:32px;border:3px solid var(--bg3);
+  border-top-color:var(--fg);border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.export-text{font-size:13px;color:var(--fg2)}
+
+/* ═══ MAP LEGEND (in-map overlay for export) ════════════════════ */
+.map-legend{
+  background:rgba(255,255,255,.95);padding:12px 14px;
+  font-size:11px;line-height:1.6;border-radius:4px;
+  box-shadow:0 1px 5px rgba(0,0,0,.15);
+}
+.map-legend h4{
+  font-size:10px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--fg3);margin-bottom:6px;
+}
+.map-legend-row{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.map-legend-row span.ml-label{font-size:10.5px;color:var(--fg2)}
+
+/* ═══ POPUP ═════════════════════════════════════════════════════ */
+.leaflet-popup-content-wrapper{border-radius:4px}
+.leaflet-popup-content{font-size:12px;line-height:1.5;margin:10px 14px;max-width:280px}
+.p-id{font-size:9px;color:var(--fg3);text-transform:uppercase;letter-spacing:.4px}
+.p-title{font-weight:700;font-size:13px;margin:2px 0 6px}
+.p-field{margin-bottom:3px}
+.p-field em{color:var(--fg3);font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:.3px}
+.p-note{margin-top:6px;padding-top:6px;border-top:1px solid #e5e5e5;font-style:italic;color:var(--fg2);font-size:11px}
+.p-tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:9.5px;font-weight:600;color:#fff;margin-top:6px}
+
+/* ═══ RESPONSIVE ════════════════════════════════════════════════ */
+@media(max-width:900px){
+  .sidebar{width:260px;min-width:260px;--sidebar-w:260px}
+  .header-title span{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="header-title">Russian Naval Activity Monitor<span>UK &amp; Adjacent Waters</span></div>
+  <div class="header-center">
+    <button class="view-btn active" data-view="map" onclick="switchView('map')">Map</button>
+    <button class="view-btn" data-view="timeline" onclick="switchView('timeline')">Timeline</button>
+  </div>
+  <div class="header-actions">
+    <button class="btn" onclick="toggleSidebar()" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      Panel
+    </button>
+    <button class="btn" onclick="exportPNG(2)" title="Export at 2x">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      PNG 2x
+    </button>
+    <button class="btn btn-primary" onclick="exportPNG(3)" title="Export at 3x (high-res)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      PNG 3x
+    </button>
+  </div>
+</div>
+
+<!-- ═══ APP BODY ════════════════════════════════════════════════ -->
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <!-- Filters -->
+    <div class="sb-section">
+      <div class="sb-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
+        <h3>Filter by type</h3>
+      </div>
+      <div class="sb-body" id="filter-body"></div>
+    </div>
+    <!-- Incidents -->
+    <div class="sb-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="sb-header">
+        <h3>Incidents</h3>
+        <span class="badge" id="incident-count">16</span>
+      </div>
+      <div class="sb-body incident-list" id="incident-list" style="flex:1"></div>
+    </div>
+    <!-- News Feed -->
+    <div class="sb-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="sb-header">
+        <h3>News Feed</h3>
+        <span class="badge auto-badge" id="feed-badge">AUTO</span>
+      </div>
+      <div class="sb-body" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+        <div class="feed-controls">
+          <button class="btn" onclick="fetchNews()" style="padding:4px 10px;font-size:10px">Refresh</button>
+          <select id="feed-interval" onchange="setFeedInterval(this.value)" style="font-size:10px;padding:3px 6px;border:1px solid var(--border);border-radius:3px">
+            <option value="900000">15 min</option>
+            <option value="1800000" selected>30 min</option>
+            <option value="3600000">1 hr</option>
+            <option value="0">Off</option>
+          </select>
+          <span class="feed-status" id="feed-status">Ready</span>
+        </div>
+        <div class="news-list" id="news-list" style="flex:1"></div>
+        <button class="btn" style="margin-top:8px;justify-content:center;width:100%" onclick="openModal()">+ Add Incident</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main" id="main-content">
+    <div id="map-view"><div id="map-container"></div></div>
+    <div id="timeline-view"></div>
+  </div>
+</div>
+
+<!-- ═══ ADD INCIDENT MODAL ══════════════════════════════════════ -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Add New Incident</h2>
+    <div class="form-row"><label>Case ID</label><input id="f-id" placeholder="e.g. UKRUS-2607"></div>
+    <div class="form-row"><label>Date</label><input id="f-date" type="date"></div>
+    <div class="form-row"><label>Category</label>
+      <select id="f-cat">
+        <option value="surface">Surface warship transit</option>
+        <option value="submarine">Submarine transit</option>
+        <option value="intel">Intelligence / spy vessel</option>
+        <option value="infra">Subsea infrastructure surveillance</option>
+        <option value="escort">Escort / logistics convoy</option>
+        <option value="coercive">Coercive / escalatory act</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Latitude</label><input id="f-lat" type="number" step="0.01" placeholder="e.g. 51.0"></div>
+    <div class="form-row"><label>Longitude</label><input id="f-lng" type="number" step="0.01" placeholder="e.g. 1.3"></div>
+    <div class="form-row"><label>Russian assets</label><input id="f-assets" placeholder="e.g. Frigate Admiral Gorshkov"></div>
+    <div class="form-row"><label>Area</label><input id="f-area" placeholder="e.g. English Channel"></div>
+    <div class="form-row"><label>UK / Allied response</label><input id="f-response" placeholder="e.g. HMS Portland tracked the group"></div>
+    <div class="form-row"><label>Analytic note</label><textarea id="f-note" placeholder="Brief analysis..."></textarea></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="addIncident()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EXPORT OVERLAY ══════════════════════════════════════════ -->
+<div class="export-overlay" id="export-overlay">
+  <div class="export-spinner"></div>
+  <div class="export-text">Rendering high-resolution image...</div>
+</div>
+
+<!-- ═══ JAVASCRIPT ══════════════════════════════════════════════ -->
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CATEGORIES
+// ═══════════════════════════════════════════════════════════════
+const CATS = {
+  surface:   { label:"Surface warship transit",            color:"#2c5f8a", shape:"circle"   },
+  submarine: { label:"Submarine transit",                  color:"#5b3a8c", shape:"diamond"  },
+  intel:     { label:"Intelligence / spy vessel",          color:"#c45425", shape:"square"   },
+  infra:     { label:"Subsea infrastructure surveillance", color:"#b5232b", shape:"triangle" },
+  escort:    { label:"Escort / logistics convoy",          color:"#c49f1a", shape:"circle"   },
+  coercive:  { label:"Coercive / escalatory act",          color:"#111",    shape:"star"     }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// DATA STORE  (seed data + localStorage persistence)
+// ═══════════════════════════════════════════════════════════════
+const SEED = [
+  { id:"UKRUS-2301",date:"2023-01-11",cat:"surface",lat:56.8,lng:1.0,assets:"Frigate Admiral Gorshkov; tanker Kama",area:"North Sea, close to UK",response:"HMS Portland tracked the group",note:"Baseline case — routine monitoring of Russian surface combatants near UK approaches." },
+  { id:"UKRUS-2302",date:"2023-05-02",cat:"surface",lat:54.5,lng:-7.5,assets:"Admiral Grigorovich; corvettes Soobrazitelny & Stoikiy",area:"Waters past the British Isles",response:"HMS Defender and Wildcat helicopter",note:"Second Royal Navy response in six weeks — signals increased frequency." },
+  { id:"UKRUS-2303",date:"2023-08-31",cat:"surface",lat:52.0,lng:1.8,assets:"Boikiy, Grad, Marshal Ustinov, Severomorsk, others; Merkury, Akademik Nikolaj Strakhov",area:"English Channel, North Sea, North Atlantic",response:"HMS Tyne, HMS Portland, RAF P-8 Poseidon",note:"Multi-zone monitoring — mixes warships with a research vessel." },
+  { id:"UKRUS-2304",date:"2023-11-08",cat:"surface",lat:51.15,lng:1.45,assets:"Frigate Admiral Grigorovich",area:"North Sea → Dover Strait → Mediterranean",response:"HMS Richmond maintained permanent contact",note:"UK framed as monitoring 'UK waters and adjacent sea areas.'" },
+  { id:"UKRUS-2401",date:"2024-09-13",cat:"submarine",lat:51.0,lng:1.25,assets:"Kilo-class submarine Novorossiysk; tug Evgeny Churov; corvette Stoiky; tanker MT Yaz",area:"Dover Strait, English Channel, North Sea, Atlantic",response:"HMS Iron Duke, HMS Tyne, NATO handoffs, RAF",note:"Surfaced submarine transit — UK concern extends beyond surface combatants." },
+  { id:"UKRUS-2411A",date:"2024-11-14",cat:"intel",lat:52.8,lng:2.2,assets:"Frigate Admiral Golovko; survey ship Yantar; tanker Vyazma",area:"North Sea → Dover Strait → Channel",response:"HMS Iron Duke, RFA Tideforce, HMS Cattistock",note:"Transition from routine shadowing to infrastructure-focused concern." },
+  { id:"UKRUS-2411B",date:"2024-11-15",cat:"infra",lat:52.2,lng:-5.8,assets:"Survey ship Yantar — operating drones",area:"Irish-controlled waters / Irish Sea",response:"Irish naval and air assets shadowed the vessel",note:"Three drones operated near subsea cables and energy infrastructure." },
+  { id:"UKRUS-2501A",date:"2025-01-01",cat:"escort",lat:50.6,lng:-0.3,assets:"Corvette Soobrazitelny; Sparta II; General Skobelev",area:"North Sea → Dover Strait → English Channel",response:"HMS Somerset recalled over Christmas",note:"Illustrates the cargo and support-shipping dimension of the pattern." },
+  { id:"UKRUS-2501B",date:"2025-01-22",cat:"infra",lat:57.8,lng:0.3,assets:"Survey ship Yantar",area:"UK Exclusive Economic Zone / North Sea (~45 nm off coast)",response:"HMS Somerset, HMS Tyne; UK changed rules of engagement",note:"Most explicit official UK statement tying Russian activity to critical underwater infrastructure." },
+  { id:"UKRUS-2503A",date:"2025-03-03",cat:"escort",lat:50.3,lng:-0.8,assets:"Corvette Boikiy; merchant vessel Baltic Leader",area:"English Channel and North Sea",response:"HMS Somerset (3-day monitoring)",note:"Escorted logistics and merchant movements included in UK threat picture." },
+  { id:"UKRUS-2503B",date:"2025-03-19",cat:"escort",lat:50.1,lng:-1.6,assets:"Destroyer Severomorsk; landing ship Alexander Shabalin; Sparta IV; Siyanie Severa",area:"English Channel and North Sea",response:"HMS Somerset, HMS Cattistock, RFA Tidesurge, helicopter, RAF P-8",note:"Repeated Syria-linked return transits — not a one-off." },
+  { id:"UKRUS-2505",date:"2025-05-09",cat:"submarine",lat:50.45,lng:-2.3,assets:"Kilo-class submarine Krasnodar",area:"English Channel",response:"HMS Tyne (NATO mission)",note:"Reinforces the undersea dimension of the Russian maritime pattern." },
+  { id:"UKRUS-2507",date:"2025-07-15",cat:"intel",lat:57.9,lng:-7.8,assets:"Intelligence ship Yuri Ivanov",area:"Waters off the Outer Hebrides",response:"HMS Dragon; Merlin helicopter",note:"Loitered near UK waters following a major NATO exercise." },
+  { id:"UKRUS-2511",date:"2025-11-19",cat:"coercive",lat:59.3,lng:-3.2,assets:"Survey ship Yantar — used lasers against RAF pilots",area:"Edge of British waters, north of Scotland",response:"Defence Secretary: UK had 'military options ready'",note:"Escalation from surveillance to direct coercive interaction with UK assets." },
+  { id:"UKRUS-2601",date:"2026-01-23",cat:"escort",lat:50.55,lng:0.6,assets:"Corvette Boikiy; oil tanker MT General Skobelev",area:"English Channel",response:"Two Royal Navy patrol ships, Wildcat helicopter",note:"Confirms continued monitoring tempo into 2026." },
+  { id:"UKRUS-2603",date:"2026-03-05",cat:"escort",lat:49.8,lng:-2.8,assets:"Landing ship Aleksandr Otrakovsky; Sparta IV; Aleksandr Shabalin; MV Sabetta",area:"Strait of Gibraltar → Atlantic → Channel → North Sea",response:"HMS Cutlass, allied warship, HMS Tyne, Wildcat helicopter",note:"Widest geography: full Atlantic-to-Channel monitoring chain." }
+];
+
+function loadIncidents(){
+  const stored = localStorage.getItem("rn_incidents");
+  if(stored){ try{ return JSON.parse(stored) }catch(e){} }
+  return [...SEED];
+}
+function saveIncidents(){ localStorage.setItem("rn_incidents", JSON.stringify(incidents)) }
+function loadNews(){
+  const stored = localStorage.getItem("rn_news");
+  if(stored){ try{ return JSON.parse(stored) }catch(e){} }
+  return [];
+}
+function saveNews(){ localStorage.setItem("rn_news", JSON.stringify(newsItems)) }
+
+let incidents = loadIncidents();
+let newsItems = loadNews();
+let activeFilters = new Set(Object.keys(CATS));
+let currentView = "map";
+
+// ═══════════════════════════════════════════════════════════════
+// MAP MODULE
+// ═══════════════════════════════════════════════════════════════
+const map = L.map("map-container",{ center:[54.5,-2], zoom:5, zoomControl:true });
+L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",{
+  attribution:'&copy; CARTO &copy; OSM', subdomains:"abcd", maxZoom:18
+}).addTo(map);
+
+let mapMarkers = [];
+
+function markerSVG(shape, color){
+  const s=28; let path;
+  switch(shape){
+    case"circle":path=`<circle cx="14" cy="14" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>`;break;
+    case"diamond":path=`<polygon points="14,4 24,14 14,24 4,14" fill="${color}" stroke="#fff" stroke-width="2"/>`;break;
+    case"square":path=`<rect x="5" y="5" width="18" height="18" rx="2" fill="${color}" stroke="#fff" stroke-width="2"/>`;break;
+    case"triangle":path=`<polygon points="14,3 26,25 2,25" fill="${color}" stroke="#fff" stroke-width="2"/>`;break;
+    case"star":path=`<polygon points="14,2 17.5,10.5 26,10.5 19.5,16 21.5,25 14,20 6.5,25 8.5,16 2,10.5 10.5,10.5" fill="${color}" stroke="#fff" stroke-width="1.5"/>`;break;
+    default:path=`<circle cx="14" cy="14" r="8" fill="${color}" stroke="#fff" stroke-width="2"/>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">${path}</svg>`;
+}
+
+function makeIcon(cat){
+  const c=CATS[cat];
+  return L.divIcon({ html:markerSVG(c.shape,c.color), className:"", iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16] });
+}
+
+function popupHTML(ev){
+  const c=CATS[ev.cat];
+  return `<div class="p-id">${ev.id}</div>
+    <div class="p-title">${formatDate(ev.date)}</div>
+    <div class="p-field"><em>Vessels </em>${ev.assets}</div>
+    <div class="p-field"><em>Area </em>${ev.area}</div>
+    <div class="p-field"><em>Response </em>${ev.response}</div>
+    <div class="p-note">${ev.note}</div>
+    <span class="p-tag" style="background:${c.color}">${c.label}</span>`;
+}
+
+function renderMapMarkers(){
+  mapMarkers.forEach(m=>map.removeLayer(m));
+  mapMarkers=[];
+  filtered().forEach(ev=>{
+    const m=L.marker([ev.lat,ev.lng],{icon:makeIcon(ev.cat)}).addTo(map);
+    m.bindPopup(popupHTML(ev),{maxWidth:300});
+    m._evId=ev.id;
+    mapMarkers.push(m);
+  });
+}
+
+// Map legend control
+const mapLegend=L.control({position:"bottomleft"});
+mapLegend.onAdd=function(){
+  const div=L.DomUtil.create("div","map-legend");
+  div.innerHTML="<h4>Incident type</h4>"+Object.entries(CATS).map(([k,c])=>
+    `<div class="map-legend-row">${markerSVG(c.shape,c.color).replace(/width="28"/,'width="16"').replace(/height="28"/,'height="16"').replace(/viewBox="0 0 28 28"/,'viewBox="0 0 28 28"')}<span class="ml-label">${c.label}</span></div>`
+  ).join("");
+  return div;
+};
+mapLegend.addTo(map);
+
+// ═══════════════════════════════════════════════════════════════
+// TIMELINE MODULE
+// ═══════════════════════════════════════════════════════════════
+function renderTimeline(){
+  const el=document.getElementById("timeline-view");
+  const data=filtered().sort((a,b)=>new Date(a.date)-new Date(b.date));
+  const startDate=new Date("2022-12-01"), endDate=new Date("2026-07-01");
+  const totalMs=endDate-startDate;
+  const W=Math.max(1100, data.length*75);
+  const pad={left:50,right:30};
+  const axisY=190;
+
+  function dateToX(d){ return pad.left+((new Date(d)-startDate)/totalMs)*(W-pad.left-pad.right) }
+
+  let html=`<div class="tl-title">Russian Naval Incursions Near UK Waters, 2023\u20132026</div>
+    <p class="tl-subtitle">Reported incidents of Russian military and intelligence vessels operating in or near British approaches</p>
+    <div class="tl-legend">${Object.entries(CATS).map(([k,c])=>
+      `<div class="tl-legend-item"><span class="tl-legend-dot" style="background:${c.color}"></span>${c.label}</div>`
+    ).join("")}</div>
+    <div class="tl-canvas" style="min-width:${W}px">
+    <div class="tl-axis" style="left:${pad.left}px;right:${pad.right}px;top:${axisY}px"></div>`;
+
+  // Year lines
+  [2023,2024,2025,2026].forEach(y=>{
+    const x=dateToX(y+"-01-01");
+    html+=`<div class="tl-year-line" style="left:${x}px;top:0;bottom:30px"></div>
+      <div class="tl-year-label" style="left:${x}px;bottom:0">${y}</div>`;
+  });
+
+  // Events
+  data.forEach((ev,i)=>{
+    const above=i%2===0;
+    const x=dateToX(ev.date);
+    const c=CATS[ev.cat];
+    const stemH=38+(i%3)*20;
+    const top=above ? axisY-stemH-42 : axisY+6;
+    const cls=above?"tl-event tl-event-above":"tl-event";
+    const shortLabel=ev.assets.split(";")[0].substring(0,30);
+    const inner=above
+      ? `<div class="tl-event-label"><span class="tl-event-date">${formatDateShort(ev.date)}</span><br>${shortLabel}</div>
+         <div class="tl-event-stem" style="height:${stemH}px"></div>
+         <div class="tl-event-dot" style="background:${c.color}"></div>`
+      : `<div class="tl-event-dot" style="background:${c.color}"></div>
+         <div class="tl-event-stem" style="height:${stemH}px"></div>
+         <div class="tl-event-label"><span class="tl-event-date">${formatDateShort(ev.date)}</span><br>${shortLabel}</div>`;
+    html+=`<div class="${cls}" style="left:${x-52}px;top:${top}px" title="${ev.id}: ${ev.note}">${inner}</div>`;
+  });
+
+  html+=`</div><div class="tl-source">Sources: Royal Navy, UK MoD, Reuters, Irish Times. Generated ${new Date().toLocaleDateString("en-GB")}.</div>`;
+  el.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIDEBAR: FILTERS
+// ═══════════════════════════════════════════════════════════════
+function renderFilters(){
+  const el=document.getElementById("filter-body");
+  el.innerHTML=Object.entries(CATS).map(([k,c])=>
+    `<div class="filter-row">
+      <input type="checkbox" id="filt-${k}" ${activeFilters.has(k)?'checked':''} onchange="toggleFilter('${k}')">
+      <span class="filter-dot" style="background:${c.color}"></span>
+      <label for="filt-${k}">${c.label}</label>
+    </div>`
+  ).join("");
+}
+
+function toggleFilter(k){
+  if(activeFilters.has(k)) activeFilters.delete(k); else activeFilters.add(k);
+  refresh();
+}
+
+function filtered(){
+  return incidents.filter(ev=>activeFilters.has(ev.cat));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIDEBAR: INCIDENT LIST
+// ═══════════════════════════════════════════════════════════════
+function renderIncidentList(){
+  const el=document.getElementById("incident-list");
+  const data=filtered().sort((a,b)=>new Date(b.date)-new Date(a.date));
+  document.getElementById("incident-count").textContent=data.length;
+  el.innerHTML=data.map(ev=>{
+    const c=CATS[ev.cat];
+    return `<div class="incident-item" onclick="focusIncident('${ev.id}')">
+      <div class="incident-id">${ev.id}</div>
+      <div class="incident-date">${formatDate(ev.date)}</div>
+      <div class="incident-short">${ev.assets.split(";")[0]}</div>
+      <span class="incident-cat-tag" style="background:${c.color}">${c.label}</span>
+    </div>`;
+  }).join("");
+}
+
+function focusIncident(id){
+  const ev=incidents.find(e=>e.id===id);
+  if(!ev)return;
+  // highlight in list
+  document.querySelectorAll(".incident-item").forEach(el=>el.classList.remove("active"));
+  event.currentTarget?.classList.add("active");
+  // focus on map
+  if(currentView==="map"){
+    map.flyTo([ev.lat,ev.lng],7,{duration:.6});
+    const marker=mapMarkers.find(m=>m._evId===id);
+    if(marker) setTimeout(()=>marker.openPopup(),650);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NEWS FEED
+// ═══════════════════════════════════════════════════════════════
+const SEARCH_QUERIES = [
+  "Russian navy UK waters",
+  "Russian warship English Channel",
+  "Russian submarine United Kingdom",
+  "Yantar spy ship",
+  "Russian vessel North Sea cable"
+];
+
+let feedTimer = null;
+
+function renderNewsList(){
+  const el=document.getElementById("news-list");
+  if(newsItems.length===0){
+    el.innerHTML=`<div style="text-align:center;padding:20px;color:var(--fg3);font-size:11px">
+      No news items yet.<br>Click <strong>Refresh</strong> to fetch latest headlines,<br>or <strong>+ Add Incident</strong> to log manually.</div>`;
+    return;
+  }
+  el.innerHTML=newsItems.slice(0,50).map((n,i)=>
+    `<div class="news-item${n.fresh?' fresh':''}">
+      <div class="news-title"><a href="${n.link||'#'}" target="_blank" rel="noopener">${n.title}</a></div>
+      <div class="news-meta">${n.source||''}${n.source&&n.pubDate?' · ':''}${n.pubDate||''}</div>
+      <div class="news-actions">
+        <button onclick="promoteNews(${i})">+ Add as incident</button>
+        <button onclick="dismissNews(${i})">Dismiss</button>
+      </div>
+    </div>`
+  ).join("");
+}
+
+async function fetchNews(){
+  const statusEl=document.getElementById("feed-status");
+  statusEl.textContent="Fetching...";
+  const query=SEARCH_QUERIES[Math.floor(Math.random()*SEARCH_QUERIES.length)];
+  const rssUrl=`https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-GB&gl=GB&ceid=GB:en`;
+  const apiUrl=`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+  try{
+    const resp=await fetch(apiUrl);
+    const data=await resp.json();
+    if(data.status==="ok"&&data.items){
+      const existingLinks=new Set(newsItems.map(n=>n.link));
+      let added=0;
+      data.items.forEach(item=>{
+        if(!existingLinks.has(item.link)){
+          newsItems.unshift({
+            title:item.title, link:item.link,
+            source:item.author||"Google News",
+            pubDate:item.pubDate?item.pubDate.substring(0,10):"",
+            fresh:true
+          });
+          added++;
+        }
+      });
+      saveNews();
+      renderNewsList();
+      statusEl.textContent=added>0?`+${added} new · ${new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`:`No new · ${new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}`;
+      document.getElementById("feed-badge").textContent=newsItems.filter(n=>n.fresh).length||"AUTO";
+    } else {
+      statusEl.textContent="Parse error";
+    }
+  }catch(err){
+    statusEl.textContent="Fetch failed — check connection";
+    console.error("News fetch error:",err);
+  }
+}
+
+function setFeedInterval(ms){
+  if(feedTimer) clearInterval(feedTimer);
+  if(+ms>0){
+    feedTimer=setInterval(fetchNews,+ms);
+    document.getElementById("feed-badge").textContent="AUTO";
+  } else {
+    document.getElementById("feed-badge").textContent="OFF";
+  }
+}
+
+function promoteNews(i){
+  const n=newsItems[i];
+  document.getElementById("f-id").value="UKRUS-NEW-"+(incidents.length+1);
+  document.getElementById("f-date").value=n.pubDate||"";
+  document.getElementById("f-note").value=n.title+(n.link?"\nSource: "+n.link:"");
+  openModal();
+}
+
+function dismissNews(i){
+  newsItems.splice(i,1);
+  saveNews();
+  renderNewsList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ADD INCIDENT
+// ═══════════════════════════════════════════════════════════════
+function openModal(){ document.getElementById("modal").classList.add("open") }
+function closeModal(){ document.getElementById("modal").classList.remove("open") }
+
+function addIncident(){
+  const ev={
+    id: document.getElementById("f-id").value||"UKRUS-"+(Date.now()%100000),
+    date: document.getElementById("f-date").value,
+    cat: document.getElementById("f-cat").value,
+    lat: parseFloat(document.getElementById("f-lat").value)||51.5,
+    lng: parseFloat(document.getElementById("f-lng").value)||0,
+    assets: document.getElementById("f-assets").value||"Unknown",
+    area: document.getElementById("f-area").value||"UK waters",
+    response: document.getElementById("f-response").value||"Under monitoring",
+    note: document.getElementById("f-note").value||""
+  };
+  incidents.push(ev);
+  saveIncidents();
+  closeModal();
+  // clear form
+  ["f-id","f-date","f-lat","f-lng","f-assets","f-area","f-response","f-note"].forEach(id=>document.getElementById(id).value="");
+  refresh();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VIEW SWITCHING
+// ═══════════════════════════════════════════════════════════════
+function switchView(view){
+  currentView=view;
+  document.querySelectorAll(".view-btn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));
+  document.getElementById("map-view").style.display=view==="map"?"block":"none";
+  document.getElementById("timeline-view").style.display=view==="timeline"?"block":"none";
+  if(view==="map") setTimeout(()=>map.invalidateSize(),50);
+  if(view==="timeline") renderTimeline();
+}
+
+function toggleSidebar(){
+  document.getElementById("sidebar").classList.toggle("collapsed");
+  setTimeout(()=>map.invalidateSize(),300);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PNG EXPORT
+// ═══════════════════════════════════════════════════════════════
+async function exportPNG(scale){
+  const overlay=document.getElementById("export-overlay");
+  overlay.classList.add("active");
+
+  // Small delay for the overlay to render
+  await new Promise(r=>setTimeout(r,100));
+
+  const target=document.getElementById("main-content");
+  try{
+    const canvas=await html2canvas(target,{
+      scale: scale||3,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: "#ffffff",
+      logging: false,
+      imageTimeout: 15000
+    });
+    const link=document.createElement("a");
+    const viewName=currentView==="map"?"map":"timeline";
+    link.download=`russia_incursion_${viewName}_${scale}x_${new Date().toISOString().slice(0,10)}.png`;
+    link.href=canvas.toDataURL("image/png");
+    link.click();
+  }catch(err){
+    console.error("Export error:",err);
+    alert("Export failed. For the map view, try zooming in first or use the timeline view for best results.");
+  }
+  overlay.classList.remove("active");
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function formatDate(d){
+  try{ return new Date(d).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) }
+  catch(e){ return d }
+}
+function formatDateShort(d){
+  try{ return new Date(d).toLocaleDateString("en-GB",{month:"short",year:"numeric"}) }
+  catch(e){ return d }
+}
+
+function refresh(){
+  renderMapMarkers();
+  renderIncidentList();
+  if(currentView==="timeline") renderTimeline();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+renderFilters();
+renderMapMarkers();
+renderIncidentList();
+renderNewsList();
+renderTimeline();
+
+// Start auto-feed (30 min default)
+setFeedInterval(1800000);
+// Initial fetch after 3 seconds
+setTimeout(fetchNews, 3000);
+</script>
+</body>
+</html>
