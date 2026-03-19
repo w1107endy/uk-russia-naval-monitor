@@ -202,6 +202,18 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--fg);overflow:
 @keyframes spin{to{transform:rotate(360deg)}}
 .export-text{font-size:13px;color:var(--fg2)}
 
+/* ═══ MISSION PULSE ANIMATION ══════════════════════════════════ */
+.mission-pulse{
+  width:44px;height:44px;border-radius:50%;
+  border:3px solid;
+  animation:missionPulse 1.5s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes missionPulse{
+  0%,100%{transform:scale(1);opacity:.8}
+  50%{transform:scale(1.35);opacity:.25}
+}
+
 /* ═══ MAP LEGEND (in-map overlay for export) ════════════════════ */
 .map-legend{
   background:rgba(255,255,255,.95);padding:12px 14px;
@@ -356,6 +368,56 @@ const CATS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// MISSION GROUPING
+// ═══════════════════════════════════════════════════════════════
+const MISSION_COLORS = ['#e67e22','#00bcd4','#9b59b6','#2ecc71','#e74c3c','#3498db','#f39c12','#1abc9c'];
+const MISSION_NAMES = {
+  'UKRUS-2411':'yantar-nov-2024',
+  'UKRUS-2501':'north-sea-jan-2025',
+  'UKRUS-2503':'channel-mar-2025'
+};
+let missionColorMap = {};
+
+function getMissionId(evId){
+  const m = evId.match(/^(.*\d)([A-Z])$/);
+  return m ? m[1] : null;
+}
+
+function getMissionGroups(){
+  const groups = {};
+  incidents.forEach(ev=>{
+    const mid = getMissionId(ev.id);
+    if(mid){
+      if(!groups[mid]) groups[mid] = [];
+      groups[mid].push(ev);
+    }
+  });
+  Object.keys(groups).forEach(k=>{
+    if(groups[k].length<2) delete groups[k];
+    else groups[k].sort((a,b)=>new Date(a.date)-new Date(b.date));
+  });
+  return groups;
+}
+
+function getMissionColor(missionId){
+  if(!missionColorMap[missionId]){
+    const idx = Object.keys(missionColorMap).length;
+    missionColorMap[missionId] = MISSION_COLORS[idx % MISSION_COLORS.length];
+  }
+  return missionColorMap[missionId];
+}
+
+function getMissionName(missionId){
+  if(MISSION_NAMES[missionId]) return MISSION_NAMES[missionId];
+  const groups = getMissionGroups();
+  const evts = groups[missionId];
+  if(!evts||!evts.length) return missionId;
+  const d = new Date(evts[0].date);
+  const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  return `group-${months[d.getMonth()]}-${d.getFullYear()}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DATA STORE  (seed data + localStorage persistence)
 // ═══════════════════════════════════════════════════════════════
 const SEED = [
@@ -425,8 +487,21 @@ function makeIcon(cat){
 
 function popupHTML(ev){
   const c=CATS[ev.cat];
+  let missionLine='';
+  const mid=getMissionId(ev.id);
+  if(mid){
+    const groups=getMissionGroups();
+    if(groups[mid]){
+      const evts=groups[mid];
+      const idx=evts.findIndex(e=>e.id===ev.id)+1;
+      const color=getMissionColor(mid);
+      const name=getMissionName(mid);
+      missionLine=`<div class="p-field" style="margin-bottom:6px"><em>Mission </em><span style="color:${color};font-weight:700">${name}</span> — sighting ${idx} of ${evts.length}</div>`;
+    }
+  }
   return `<div class="p-id">${ev.id}</div>
     <div class="p-title">${formatDate(ev.date)}</div>
+    ${missionLine}
     <div class="p-field"><em>Vessels </em>${ev.assets}</div>
     <div class="p-field"><em>Area </em>${ev.area}</div>
     <div class="p-field"><em>Response </em>${ev.response}</div>
@@ -441,9 +516,93 @@ function renderMapMarkers(){
     const m=L.marker([ev.lat,ev.lng],{icon:makeIcon(ev.cat)}).addTo(map);
     m.bindPopup(popupHTML(ev),{maxWidth:300});
     m._evId=ev.id;
+    m.on('click',function(){
+      const mid=getMissionId(ev.id);
+      if(mid){
+        const groups=getMissionGroups();
+        if(groups[mid]){
+          _missionClickFlag=true;
+          highlightMission(mid);
+        }
+      }
+    });
     mapMarkers.push(m);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════
+// MISSION RINGS, BADGES & HIGHLIGHT
+// ═══════════════════════════════════════════════════════════════
+let missionLayers=[];
+let pulseMarkers=[];
+let highlightedMission=null;
+let _missionClickFlag=false;
+
+function renderMissionGrouping(){
+  missionLayers.forEach(l=>map.removeLayer(l));
+  missionLayers=[];
+  missionColorMap={};
+  const groups=getMissionGroups();
+
+  Object.entries(groups).forEach(([mid,evts])=>{
+    const color=getMissionColor(mid);
+    const activeEvts=evts.filter(ev=>activeFilters.has(ev.cat));
+
+    activeEvts.forEach((ev,idx)=>{
+      // Coloured ring
+      const ring=L.circleMarker([ev.lat,ev.lng],{
+        radius:18, color:color, weight:3, opacity:.6,
+        fillColor:color, fillOpacity:.08, interactive:false
+      }).addTo(map);
+      missionLayers.push(ring);
+
+      // Sequence badge (offset to top-right)
+      const badge=L.marker([ev.lat,ev.lng],{
+        icon:L.divIcon({
+          className:'',
+          html:`<div style="background:${color};color:#fff;width:18px;height:18px;border-radius:50%;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);pointer-events:none">${idx+1}</div>`,
+          iconSize:[18,18],
+          iconAnchor:[-5,22]
+        }),
+        interactive:false
+      }).addTo(map);
+      missionLayers.push(badge);
+    });
+  });
+}
+
+function highlightMission(missionId){
+  clearMissionHighlight();
+  highlightedMission=missionId;
+  const groups=getMissionGroups();
+  const evts=groups[missionId];
+  if(!evts)return;
+  const color=getMissionColor(missionId);
+
+  evts.filter(ev=>activeFilters.has(ev.cat)).forEach(ev=>{
+    const pulse=L.marker([ev.lat,ev.lng],{
+      icon:L.divIcon({
+        className:'',
+        html:`<div class="mission-pulse" style="border-color:${color}"></div>`,
+        iconSize:[44,44],
+        iconAnchor:[22,22]
+      }),
+      interactive:false
+    }).addTo(map);
+    pulseMarkers.push(pulse);
+  });
+}
+
+function clearMissionHighlight(){
+  pulseMarkers.forEach(m=>map.removeLayer(m));
+  pulseMarkers=[];
+  highlightedMission=null;
+}
+
+map.on('click',function(){
+  if(_missionClickFlag){ _missionClickFlag=false; return; }
+  clearMissionHighlight();
+});
 
 // Map legend control
 const mapLegend=L.control({position:"bottomleft"});
@@ -451,7 +610,10 @@ mapLegend.onAdd=function(){
   const div=L.DomUtil.create("div","map-legend");
   div.innerHTML="<h4>Incident type</h4>"+Object.entries(CATS).map(([k,c])=>
     `<div class="map-legend-row">${markerSVG(c.shape,c.color).replace(/width="28"/,'width="16"').replace(/height="28"/,'height="16"').replace(/viewBox="0 0 28 28"/,'viewBox="0 0 28 28"')}<span class="ml-label">${c.label}</span></div>`
-  ).join("");
+  ).join("")+
+  '<h4 style="margin-top:8px">Mission grouping</h4>'+
+  '<div class="map-legend-row"><span style="width:14px;height:14px;border-radius:50%;border:2.5px solid #e67e22;display:inline-block;flex-shrink:0"></span><span class="ml-label">Coloured ring = same mission</span></div>'+
+  '<div class="map-legend-row"><span style="background:#e67e22;color:#fff;width:14px;height:14px;border-radius:50%;font-size:8px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">1</span><span class="ml-label">Sighting order (by date)</span></div>';
   return div;
 };
 mapLegend.addTo(map);
@@ -538,10 +700,18 @@ function renderIncidentList(){
   const el=document.getElementById("incident-list");
   const data=filtered().sort((a,b)=>new Date(b.date)-new Date(a.date));
   document.getElementById("incident-count").textContent=data.length;
+  const groups=getMissionGroups();
   el.innerHTML=data.map(ev=>{
     const c=CATS[ev.cat];
+    const mid=getMissionId(ev.id);
+    let mBadge='';
+    if(mid&&groups[mid]){
+      const mc=getMissionColor(mid);
+      const idx=groups[mid].findIndex(e=>e.id===ev.id)+1;
+      mBadge=`<span style="display:inline-flex;align-items:center;gap:3px;margin-left:5px;vertical-align:middle"><span style="width:8px;height:8px;border-radius:50%;border:2px solid ${mc};display:inline-block"></span><span style="background:${mc};color:#fff;font-size:8px;font-weight:700;width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center">${idx}</span></span>`;
+    }
     return `<div class="incident-item" onclick="focusIncident('${ev.id}')">
-      <div class="incident-id">${ev.id}</div>
+      <div class="incident-id">${ev.id}${mBadge}</div>
       <div class="incident-date">${formatDate(ev.date)}</div>
       <div class="incident-short">${ev.assets.split(";")[0]}</div>
       <span class="incident-cat-tag" style="background:${c.color}">${c.label}</span>
@@ -560,6 +730,12 @@ function focusIncident(id){
     map.flyTo([ev.lat,ev.lng],7,{duration:.6});
     const marker=mapMarkers.find(m=>m._evId===id);
     if(marker) setTimeout(()=>marker.openPopup(),650);
+    // highlight mission group
+    const mid=getMissionId(id);
+    if(mid){
+      const groups=getMissionGroups();
+      if(groups[mid]) setTimeout(()=>highlightMission(mid),100);
+    }
   }
 }
 
@@ -744,6 +920,8 @@ function formatDateShort(d){
 
 function refresh(){
   renderMapMarkers();
+  renderMissionGrouping();
+  clearMissionHighlight();
   renderIncidentList();
   if(currentView==="timeline") renderTimeline();
 }
@@ -753,6 +931,7 @@ function refresh(){
 // ═══════════════════════════════════════════════════════════════
 renderFilters();
 renderMapMarkers();
+renderMissionGrouping();
 renderIncidentList();
 renderNewsList();
 renderTimeline();
